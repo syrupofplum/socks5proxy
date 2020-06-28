@@ -15,7 +15,7 @@ type Server struct {
 }
 
 func (s *Server) Listen() {
-	errChan := make(chan error)
+	errChan := make(chan error, 1)
 	go func(errChan chan error) {
 		for _, bindConfig := range s.BindConfigs {
 			ln, err := net.Listen(bindConfig.Network, bindConfig.Address)
