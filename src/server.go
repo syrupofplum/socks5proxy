@@ -65,12 +65,12 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	var methodsBuffer [257]byte
 	var methodsByteLength uint
 	var methodsRespBuffer [2]byte
-	var requestBuffer [10]byte
+	var requestBuffer [32]byte
 	var requestByteLength uint
 	var _ [4096]byte
 
 	rd := bufio.NewReader(conn)
-	wt := bufio.NewWriter(conn)
+	wr := bufio.NewWriter(conn)
 	var n int
 	var err error
 
@@ -81,15 +81,22 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	}
 	methodsByteLength = uint(n)
 	fmt.Printf("methods buffer length: %v\n", methodsByteLength)
+	fmt.Printf("methods buffer: %v\n", methodsBuffer[:16])
 
 	methodsRespBuffer[0] = 0x05
 	methodsRespBuffer[1] = 0x00
-	n, err = wt.Write(methodsRespBuffer[:])
+	n, err = wr.Write(methodsRespBuffer[:])
 	if nil != err {
 		errChan <- fmt.Errorf("send client methods resp buffer error")
 		return
 	}
+	err = wr.Flush()
+	if nil != err {
+		errChan <- fmt.Errorf("send client methods resp buffer flush error")
+		return
+	}
 	fmt.Printf("methods resp buffer length: %v\n", n)
+	fmt.Printf("methods resp buffer: %v\n", methodsRespBuffer)
 
 	n, err = rd.Read(requestBuffer[:])
 	if nil != err {
