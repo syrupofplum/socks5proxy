@@ -1,23 +1,33 @@
 package src
 
+func GetByteLength(p ProtocolBase) uint {
+	return p.GetByteLength()
+}
+
 type ProtocolBase interface {
-	GetDepth() uint8
+	GetDepth() uint
+	GetByteLength() uint
 }
 
 type ProtocolValidator interface {
 	Validate() bool
 }
 
-type ClientTCPMethodsHeader struct {
+type ClientTCPMethods struct {
 	VER      byte
 	NMETHODS byte
+	METHODS  []byte
 }
 
-func (c *ClientTCPMethodsHeader) GetDepth() uint8 {
+func (c *ClientTCPMethods) GetDepth() uint {
 	return 0
 }
 
-func (c *ClientTCPMethodsHeader) Validate() bool {
+func (c *ClientTCPMethods) GetByteLength() uint {
+	return uint(2 + c.NMETHODS)
+}
+
+func (c *ClientTCPMethods) Validate() bool {
 	if c.VER != byte(5) {
 		return false
 	}
@@ -27,31 +37,23 @@ func (c *ClientTCPMethodsHeader) Validate() bool {
 	return true
 }
 
-type ClientTCPMethods struct {
-	METHODS  []byte
-}
-
-func (c *ClientTCPMethods) GetDepth() uint8 {
-	return 1
-}
-
 type ClientRemoteHeader struct {
-	VER byte
-	CMD byte
-	RSV byte
-	ATYP byte
-}
-
-func (c *ClientRemoteHeader) GetDepth() uint8 {
-	return 2
-}
-
-type ClientRemoteDetail struct {
+	VER     byte
+	CMD     byte
+	RSV     byte
+	ATYP    byte
 	DSTADDR []byte
 	DSTPORT []byte
 }
 
-func (c *ClientRemoteDetail) GetDepth() uint8 {
+func (c *ClientRemoteHeader) GetDepth() uint {
+	return 100
+}
+
+type ClientRemoteDetail struct {
+}
+
+func (c *ClientRemoteDetail) GetDepth() uint {
 	return 3
 }
 
@@ -60,6 +62,6 @@ type ServerMethods struct {
 	METHOD byte
 }
 
-func (s *ServerMethods) GetDepth() uint8 {
+func (s *ServerMethods) GetDepth() uint {
 	return 0
 }
