@@ -17,8 +17,8 @@ type Server struct {
 
 func (s *Server) Listen() {
 	errChan := make(chan error, 1)
-	go func(errChan chan error) {
-		for _, bindConfig := range s.BindConfigs {
+	for _, bindConfig := range s.BindConfigs {
+		go func(errChan chan error) {
 			switch strings.ToLower(bindConfig.Network) {
 			case "tcp":
 				ln, err := net.Listen(bindConfig.Network, bindConfig.Address)
@@ -48,8 +48,8 @@ func (s *Server) Listen() {
 				errChan <- fmt.Errorf("unknown network protocol")
 				return
 			}
-		}
-	}(errChan)
+		}(errChan)
+	}
 	select {
 	case err := <-errChan:
 		fmt.Println(err)
