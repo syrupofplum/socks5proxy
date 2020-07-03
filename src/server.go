@@ -6,11 +6,6 @@ import (
 	"strings"
 )
 
-type ServerBindConfig struct {
-	Network string
-	Address string
-}
-
 type Server struct {
 	BindConfigs []ServerBindConfig
 }
