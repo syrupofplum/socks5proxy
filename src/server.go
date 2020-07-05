@@ -13,6 +13,7 @@ type Server struct {
 func (s *Server) Listen() {
 	errChan := make(chan error, 1)
 	for _, bindConfig := range s.BindConfigs {
+		bindConfig := bindConfig
 		go func(errChan chan error) {
 			switch strings.ToLower(bindConfig.Network) {
 			case "tcp":
