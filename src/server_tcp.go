@@ -2,9 +2,23 @@ package src
 
 import (
 	"bufio"
+	"encoding/binary"
 	"fmt"
+	"io"
 	"net"
+	"strconv"
 )
+
+func (s *Server) handleSend(wr io.Writer, bufChan chan []byte, errChan chan error) {
+	for {
+		n, err := wr.Write(<-bufChan)
+		if nil != err {
+			errChan <- fmt.Errorf("send client data fail, err: %v\n", err)
+			break
+		}
+		fmt.Printf("send client data length: %v\n", n)
+	}
+}
 
 func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	fmt.Println("in handle conn")
@@ -15,7 +29,10 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	var pClientTCPRequestsIns protocolClientTCPRequests
 	var pServerTCPRepliesIns protocolServerTCPReplies
 
-	var data [4096]byte
+	var clientBuf [40960]byte
+	var proxyBuf [40960]byte
+	var clientBufChan chan []byte = make(chan []byte, 1)
+	var proxyBufChan chan []byte = make(chan []byte, 1)
 
 	rd := bufio.NewReader(conn)
 	wr := bufio.NewWriter(conn)
@@ -56,7 +73,16 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	fmt.Printf("request buffer length: %v\n", pClientTCPRequestsIns.getByteLength())
 	fmt.Printf("request buffer: %v\n", pClientTCPRequestsIns.getBuf())
 
-	// todo: establish proxy conn
+	var proxyTcp ProxyTcp
+	proxyTcp.proxyConfig.Network = "tcp"
+	proxyTcp.proxyConfig.Address = fmt.Sprintf("%v:%v", string(pClientTCPRequestsIns.DstAddr[1:]), strconv.Itoa(int(binary.BigEndian.Uint16(pClientTCPRequestsIns.DstPort))))
+	err = proxyTcp.connect()
+	if nil != err {
+		errChan <- fmt.Errorf("establish proxy tcp conn error, err: %v", err)
+		return
+	}
+	go proxyTcp.handleSend(clientBufChan, errChan)
+	go proxyTcp.handleRecv(proxyBuf[:], proxyBufChan, errChan)
 
 	pServerTCPRepliesIns.Ver = 0x05
 	pServerTCPRepliesIns.Rep = 0x00
@@ -79,14 +105,14 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	fmt.Printf("replies resp buffer length: %v\n", pServerTCPRepliesIns.getByteLength())
 	fmt.Printf("replies resp buffer: %v\n", pServerTCPRepliesIns.getBuf())
 
+	go s.handleSend(wr, proxyBufChan, errChan)
 	for {
-		n, err := rd.Read(data[:])
+		n, err := rd.Read(clientBuf[:])
 		if nil != err {
-			errChan <- fmt.Errorf("receive client data buffer error, err: %v", err)
+			errChan <- fmt.Errorf("receive client data buffer fail, err: %v", err)
 			return
 		}
-		fmt.Printf("receive data buffer length: %v\n", n)
-
-		// todo: send data to remote server && send replies to client
+		fmt.Printf("receive client data buffer length: %v\n", n)
+		clientBufChan <- clientBuf[:n]
 	}
 }

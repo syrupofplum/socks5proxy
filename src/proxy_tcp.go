@@ -2,16 +2,19 @@ package src
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 )
 
 type ProxyTcp struct {
 	proxyConfig ProxyConfig
-	rd *bufio.Reader
-	wr *bufio.Writer
+	rd          *bufio.Reader
+	wr          *bufio.Writer
 }
 
 func (p *ProxyTcp) connect() error {
+	fmt.Println(p.proxyConfig.Network)
+	fmt.Println(p.proxyConfig.Address)
 	proxyConn, err := net.Dial(p.proxyConfig.Network, p.proxyConfig.Address)
 	if nil != err {
 		return err
@@ -26,10 +29,18 @@ func (p *ProxyTcp) send(data []byte) (int, error) {
 	if nil != err {
 		return -1, err
 	}
-	return n, err
+	fmt.Printf("send proxy data length: %v\n", n)
+	return n, nil
 }
 
-func (p *ProxyTcp) handleSend(data chan []byte, errChan chan error) {
+func (p *ProxyTcp) handleSend(bufChan chan []byte, errChan chan error) {
+	for {
+		_, err := p.send(<-bufChan)
+		if nil != err {
+			errChan <- fmt.Errorf("send proxy fail, err: %v\n", err)
+			break
+		}
+	}
 }
 
 func (p *ProxyTcp) recv(data []byte) (int, error) {
@@ -37,5 +48,17 @@ func (p *ProxyTcp) recv(data []byte) (int, error) {
 	if nil != err {
 		return -1, err
 	}
-	return n, err
+	fmt.Printf("recv proxy data length: %v\n", n)
+	return n, nil
+}
+
+func (p *ProxyTcp) handleRecv(buf []byte, bufChan chan []byte, errChan chan error) {
+	for {
+		n, err := p.recv(buf)
+		if nil != err {
+			errChan <- fmt.Errorf("recv proxy fail, err: %v\n", err)
+			break
+		}
+		bufChan <- buf[:n]
+	}
 }
