@@ -8,6 +8,7 @@ import (
 
 type ProxyTcp struct {
 	proxyConfig ProxyConfig
+	proxyConn   net.Conn
 	rd          *bufio.Reader
 	wr          *bufio.Writer
 }
@@ -15,12 +16,13 @@ type ProxyTcp struct {
 func (p *ProxyTcp) connect() error {
 	fmt.Println(p.proxyConfig.Network)
 	fmt.Println(p.proxyConfig.Address)
-	proxyConn, err := net.Dial(p.proxyConfig.Network, p.proxyConfig.Address)
+	var err error
+	p.proxyConn, err = net.Dial(p.proxyConfig.Network, p.proxyConfig.Address)
 	if nil != err {
 		return err
 	}
-	p.rd = bufio.NewReader(proxyConn)
-	p.wr = bufio.NewWriter(proxyConn)
+	p.rd = bufio.NewReader(p.proxyConn)
+	p.wr = bufio.NewWriter(p.proxyConn)
 	return nil
 }
 

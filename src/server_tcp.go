@@ -81,6 +81,7 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 		errChan <- fmt.Errorf("establish proxy tcp conn error, err: %v", err)
 		return
 	}
+	defer proxyTcp.proxyConn.Close()
 	go proxyTcp.handleSend(clientBufChan, errChan)
 	go proxyTcp.handleRecv(proxyBuf[:], proxyBufChan, errChan)
 
