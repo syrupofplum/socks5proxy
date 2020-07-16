@@ -1,7 +1,7 @@
 package tests
 
 import (
-	src "../src"
+	"../src"
 	"testing"
 )
 

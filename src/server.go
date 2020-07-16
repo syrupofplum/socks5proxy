@@ -22,24 +22,28 @@ func (s *Server) Listen() {
 					errChan <- err
 					return
 				}
-				conn, err := ln.Accept()
-				if nil != err {
-					errChan <- err
-					return
+				for true {
+					conn, err := ln.Accept()
+					if nil != err {
+						errChan <- err
+						return
+					}
+					go s.HandleTcpConn(conn, errChan)
 				}
-				go s.HandleTcpConn(conn, errChan)
 			case "udp":
 				ln, err := net.Listen(bindConfig.Network, bindConfig.Address)
 				if nil != err {
 					errChan <- err
 					return
 				}
-				conn, err := ln.Accept()
-				if nil != err {
-					errChan <- err
-					return
+				for true {
+					conn, err := ln.Accept()
+					if nil != err {
+						errChan <- err
+						return
+					}
+					go s.HandleUdpConn(conn, errChan)
 				}
-				go s.HandleUdpConn(conn, errChan)
 			default:
 				errChan <- fmt.Errorf("unknown network protocol")
 				return

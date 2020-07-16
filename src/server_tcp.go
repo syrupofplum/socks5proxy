@@ -9,9 +9,14 @@ import (
 	"strconv"
 )
 
-func (s *Server) handleSend(wr io.Writer, bufChan chan []byte, errChan chan error) {
+func (s *Server) handleSend(wr *bufio.Writer, bufChan chan []byte, errChan chan error) {
 	for {
 		n, err := wr.Write(<-bufChan)
+		if nil != err {
+			errChan <- fmt.Errorf("send client data fail, err: %v\n", err)
+			break
+		}
+		err = wr.Flush()
 		if nil != err {
 			errChan <- fmt.Errorf("send client data fail, err: %v\n", err)
 			break
@@ -29,10 +34,10 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	var pClientTCPRequestsIns protocolClientTCPRequests
 	var pServerTCPRepliesIns protocolServerTCPReplies
 
-	var clientBuf [40960]byte
-	var proxyBuf [40960]byte
-	var clientBufChan chan []byte = make(chan []byte, 1)
-	var proxyBufChan chan []byte = make(chan []byte, 1)
+	//var clientBuf [40960]byte
+	//var proxyBuf [40960]byte
+	//var clientBufChan chan []byte = make(chan []byte, 1)
+	//var proxyBufChan chan []byte = make(chan []byte, 1)
 
 	rd := bufio.NewReader(conn)
 	wr := bufio.NewWriter(conn)
@@ -82,8 +87,8 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 		return
 	}
 	defer proxyTcp.proxyConn.Close()
-	go proxyTcp.handleSend(clientBufChan, errChan)
-	go proxyTcp.handleRecv(proxyBuf[:], proxyBufChan, errChan)
+	//go proxyTcp.handleSend(clientBufChan, errChan)
+	//go proxyTcp.handleRecv(proxyBuf[:], proxyBufChan, errChan)
 
 	pServerTCPRepliesIns.Ver = 0x05
 	pServerTCPRepliesIns.Rep = 0x00
@@ -106,14 +111,16 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	fmt.Printf("replies resp buffer length: %v\n", pServerTCPRepliesIns.getByteLength())
 	fmt.Printf("replies resp buffer: %v\n", pServerTCPRepliesIns.getBuf())
 
-	go s.handleSend(wr, proxyBufChan, errChan)
-	for {
-		n, err := rd.Read(clientBuf[:])
-		if nil != err {
-			errChan <- fmt.Errorf("receive client data buffer fail, err: %v", err)
-			return
-		}
-		fmt.Printf("receive client data buffer length: %v\n", n)
-		clientBufChan <- clientBuf[:n]
-	}
+	//go s.handleSend(wr, proxyBufChan, errChan)
+	//for {
+	//	n, err := rd.Read(clientBuf[:])
+	//	if nil != err {
+	//		errChan <- fmt.Errorf("receive client data buffer fail, err: %v", err)
+	//		return
+	//	}
+	//	fmt.Printf("receive client data buffer length: %v, %v\n", n, clientBuf[:5])
+	//	clientBufChan <- clientBuf[:n]
+	//}
+	go io.Copy(conn, proxyTcp.proxyConn)
+	io.Copy(proxyTcp.proxyConn, conn)
 }

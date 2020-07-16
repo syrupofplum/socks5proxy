@@ -31,13 +31,19 @@ func (p *ProxyTcp) send(data []byte) (int, error) {
 	if nil != err {
 		return -1, err
 	}
+	err = p.wr.Flush()
+	if nil != err {
+		return -1, err
+	}
 	fmt.Printf("send proxy data length: %v\n", n)
 	return n, nil
 }
 
 func (p *ProxyTcp) handleSend(bufChan chan []byte, errChan chan error) {
 	for {
-		_, err := p.send(<-bufChan)
+		buf := <-bufChan
+		fmt.Printf("send proxy: %v\n", buf[:5])
+		_, err := p.send(buf)
 		if nil != err {
 			errChan <- fmt.Errorf("send proxy fail, err: %v\n", err)
 			break
