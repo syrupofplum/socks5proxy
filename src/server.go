@@ -50,10 +50,12 @@ func (s *Server) Listen() {
 			}
 		}(errChan)
 	}
-	select {
-	case err := <-errChan:
-		fmt.Println(err)
-		break
+	for {
+		select {
+		case err := <-errChan:
+			fmt.Println(err)
+			break
+		}
 	}
 }
 
