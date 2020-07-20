@@ -9,38 +9,41 @@ import (
 	"strconv"
 )
 
-func (s *Server) handleSend(wr *bufio.Writer, bufChan chan []byte, errChan chan error) {
+func (s *Server) handleSend(proxyConn net.Conn, clientConn net.Conn, errChan chan error, outerChan chan error) {
+	var buf = make([]byte, 32*1024)
 	for {
-		n, err := wr.Write(<-bufChan)
+		_, err := io.CopyBuffer(proxyConn, clientConn, buf)
 		if nil != err {
-			errChan <- fmt.Errorf("send client data fail, err: %v\n", err)
+			outerChan <- err
+			errChan <- err
 			break
 		}
-		err = wr.Flush()
-		if nil != err {
-			errChan <- fmt.Errorf("send client data fail, err: %v\n", err)
-			break
-		}
-		fmt.Printf("send client data length: %v\n", n)
 	}
 }
 
-func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
+func (s *Server) handleRecv(clientConn net.Conn, proxyConn net.Conn, errChan chan error, outerChan chan error) {
+	var buf = make([]byte, 32*1024)
+	for {
+		_, err := io.CopyBuffer(clientConn, proxyConn, buf)
+		if nil != err {
+			outerChan <- err
+			errChan <- err
+			break
+		}
+	}
+}
+
+func (s *Server) HandleTcpConn(clientConn net.Conn, errChan chan error) {
 	fmt.Println("in handle conn")
-	defer conn.Close()
+	defer clientConn.Close()
 
 	var pClientTCPMethodsIns protocolClientTCPMethods
 	var pServerTCPMethodsIns protocolServerTCPMethods
 	var pClientTCPRequestsIns protocolClientTCPRequests
 	var pServerTCPRepliesIns protocolServerTCPReplies
 
-	//var clientBuf [40960]byte
-	//var proxyBuf [40960]byte
-	//var clientBufChan chan []byte = make(chan []byte, 1)
-	//var proxyBufChan chan []byte = make(chan []byte, 1)
-
-	rd := bufio.NewReader(conn)
-	wr := bufio.NewWriter(conn)
+	rd := bufio.NewReader(clientConn)
+	wr := bufio.NewWriter(clientConn)
 	var err error
 
 	err = readProtocol(&pClientTCPMethodsIns, rd)
@@ -87,8 +90,6 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 		return
 	}
 	defer proxyTcp.proxyConn.Close()
-	//go proxyTcp.handleSend(clientBufChan, errChan)
-	//go proxyTcp.handleRecv(proxyBuf[:], proxyBufChan, errChan)
 
 	pServerTCPRepliesIns.Ver = 0x05
 	pServerTCPRepliesIns.Rep = 0x00
@@ -111,16 +112,19 @@ func (s *Server) HandleTcpConn(conn net.Conn, errChan chan error) {
 	fmt.Printf("replies resp buffer length: %v\n", pServerTCPRepliesIns.getByteLength())
 	fmt.Printf("replies resp buffer: %v\n", pServerTCPRepliesIns.getBuf())
 
-	//go s.handleSend(wr, proxyBufChan, errChan)
-	//for {
-	//	n, err := rd.Read(clientBuf[:])
-	//	if nil != err {
-	//		errChan <- fmt.Errorf("receive client data buffer fail, err: %v", err)
-	//		return
-	//	}
-	//	fmt.Printf("receive client data buffer length: %v, %v\n", n, clientBuf[:5])
-	//	clientBufChan <- clientBuf[:n]
-	//}
-	go io.Copy(conn, proxyTcp.proxyConn)
-	io.Copy(proxyTcp.proxyConn, conn)
+	var outerChan = make(chan error, 2)
+	defer close(outerChan)
+	var outerChanCounter = 0
+	go s.handleSend(proxyTcp.proxyConn, clientConn, errChan, outerChan)
+	go s.handleRecv(clientConn, proxyTcp.proxyConn, errChan, outerChan)
+	for true {
+		select {
+		case <-outerChan:
+			outerChanCounter += 1
+			if outerChanCounter >= 2 {
+				fmt.Printf("exit from %v\n", proxyTcp.proxyConfig.Address)
+				break
+			}
+		}
+	}
 }
