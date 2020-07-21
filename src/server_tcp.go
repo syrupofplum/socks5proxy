@@ -7,27 +7,28 @@ import (
 	"io"
 	"net"
 	"strconv"
+	"sync"
 )
 
-func (s *Server) handleSend(proxyConn net.Conn, clientConn net.Conn, errChan chan error, outerChan chan error) {
+func (s *Server) handleSend(proxyConn net.Conn, clientConn net.Conn, errChan chan error, waitGroup *sync.WaitGroup) {
 	var buf = make([]byte, 32*1024)
 	for {
 		_, err := io.CopyBuffer(proxyConn, clientConn, buf)
 		if nil != err {
-			outerChan <- err
 			errChan <- err
+			waitGroup.Done()
 			break
 		}
 	}
 }
 
-func (s *Server) handleRecv(clientConn net.Conn, proxyConn net.Conn, errChan chan error, outerChan chan error) {
+func (s *Server) handleRecv(clientConn net.Conn, proxyConn net.Conn, errChan chan error, waitGroup *sync.WaitGroup) {
 	var buf = make([]byte, 32*1024)
 	for {
 		_, err := io.CopyBuffer(clientConn, proxyConn, buf)
 		if nil != err {
-			outerChan <- err
 			errChan <- err
+			waitGroup.Done()
 			break
 		}
 	}
@@ -112,19 +113,10 @@ func (s *Server) HandleTcpConn(clientConn net.Conn, errChan chan error) {
 	fmt.Printf("replies resp buffer length: %v\n", pServerTCPRepliesIns.getByteLength())
 	fmt.Printf("replies resp buffer: %v\n", pServerTCPRepliesIns.getBuf())
 
-	var outerChan = make(chan error, 2)
-	defer close(outerChan)
-	var outerChanCounter = 0
-	go s.handleSend(proxyTcp.proxyConn, clientConn, errChan, outerChan)
-	go s.handleRecv(clientConn, proxyTcp.proxyConn, errChan, outerChan)
-	for true {
-		select {
-		case <-outerChan:
-			outerChanCounter += 1
-			if outerChanCounter >= 2 {
-				fmt.Printf("exit from %v\n", proxyTcp.proxyConfig.Address)
-				break
-			}
-		}
-	}
+	var waitGroup sync.WaitGroup
+	waitGroup.Add(2)
+	go s.handleSend(proxyTcp.proxyConn, clientConn, errChan, &waitGroup)
+	go s.handleRecv(clientConn, proxyTcp.proxyConn, errChan, &waitGroup)
+	waitGroup.Wait()
+	fmt.Printf("exit from %v\n", proxyTcp.proxyConfig.Address)
 }
